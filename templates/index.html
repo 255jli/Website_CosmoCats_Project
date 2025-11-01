@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CosmoCats - Космические коты будущего</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Фон с звездами -->
+    <div class="stars"></div>
+    <div class="stars2"></div>
+    <div class="stars3"></div>
+    
+    <!-- Космическая граница -->
+    <div class="cosmic-border"></div>
+
+    <!-- Хедер -->
+    <header class="cosmic-header">
+        <nav class="nav-container">
+            <div class="logo">
+                <span class="logo-icon">🚀🐱</span>
+                <span class="logo-text">CosmoCats</span>
+            </div>
+            <button class="auth-btn cosmic-button">
+                <span class="btn-glow"></span>
+                Регистрация/Вход
+            </button>
+        </nav>
+    </header>
+
+    <!-- Главный герой-блок -->
+    <section class="hero-section">
+        <div class="planet-system">
+            <div class="planet">
+                <div class="planet-surface"></div>
+                <div class="planet-rings"></div>
+                <div class="planet-glow"></div>
+            </div>
+            <div class="orbiting-cat">🐱</div>
+        </div>
+        
+        <div class="hero-content">
+            <h1 class="main-title">
+                <span class="title-part">Коты которые:</span>
+                <span class="carousel-container">
+                    <span id="word-carousel" class="word-carousel">исследуют</span>
+                </span>
+            </h1>
+            <p class="hero-subtitle">Межгалактическая организация продвинутых кошачьих</p>
+            <button class="cta-button cosmic-button">
+                <span class="btn-glow"></span>
+                Присоединиться к миссии
+            </button>
+        </div>
+    </section>
+
+    <!-- Секция возможностей -->
+    <section class="features-section">
+        <div class="section-header">
+            <h2>Наши космические возможности</h2>
+            <div class="section-divider"></div>
+        </div>
+        
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🌌</div>
+                <h3>Галактические исследования</h3>
+                <p>Наши коты исследуют дальние уголки вселенной в поисках новых видов мышей</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Квантовые технологии</h3>
+                <p>Разрабатываем передовые технологии для одновременного нахождения в нескольких местах</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🔭</div>
+                <h3>Телескопическое зрение</h3>
+                <p>Наблюдаем за всем происходящим в радиусе 10 световых лет</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Секция комментариев -->
+    <section class="testimonials-section">
+        <div class="section-header">
+            <h2>Отзывы космических котов</h2>
+            <div class="section-divider"></div>
+        </div>
+        
+        <div class="testimonials-container">
+            <div class="testimonial-card">
+                <div class="cat-avatar">🐱</div>
+                <h4>Космо-кот Барсик</h4>
+                <p>"С помощью CosmoCats я нашел 15 новых планет, пригодных для дневного сна!"</p>
+                <div class="rating">★★★★★</div>
+            </div>
+            
+            <div class="testimonial-card">
+                <div class="cat-avatar">😼</div>
+                <h4>Астро-кошка Мурка</h4>
+                <p>"Теперь могу одновременно охотиться за лазерной указкой в 3-х измерениях!"</p>
+                <div class="rating">★★★★☆</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Секция статистики -->
+    <section class="stats-section">
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number" data-target="42">0</div>
+                <div class="stat-label">Покоренных галактик</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" data-target="999">0</div>
+                <div class="stat-label">Найденных планет для сна</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" data-target="777">0</div>
+                <div class="stat-label">Космических мышей поймано</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Футер -->
+    <footer class="cosmic-footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>CosmoCats</h4>
+                <p>Межгалактическая организация кошачьего превосходства</p>
+            </div>
+            <div class="footer-section">
+                <h4>Контакты</h4>
+                <p>Туманность Андромеды, Сектор 7G</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 CosmoCats. Все права защищены во всех вселенных</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
