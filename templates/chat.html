@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Чат {{ chat_id }}</h2>
+<div style="margin-bottom: 1rem;">
+  <img src="/chat/{{ chat_id }}/avatar" alt="cat avatar" style="width:96px;height:96px;border-radius:50%;background:#111;">
+  <a class="btn btn-secondary" href="/platform" style="margin-left:1rem">Назад к списку</a>
+</div>
+<div id="chat-history" class="chat-history">
+  {% for m in history %}
+    <div class="msg {{ m.role }}">
+      <strong>{{ m.role }}:</strong> {{ m.content }}
+    </div>
+  {% else %}
+    <div>История пуста</div>
+  {% endfor %}
+  <form method="post" style="margin-top:1rem">
+    <input name="message" placeholder="Напишите сообщение..." required>
+    <button class="btn btn-primary" type="submit">Отправить</button>
+  </form>
+</div>
+{% endblock %}
+

@@ -1,216 +1,177 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
+from __future__ import annotations
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import (
+    LoginManager,
+    login_required,
+    current_user,
+)
 import os
-import io
-import db
-from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
-from dotenv import load_dotenv
-from PIL import Image, ImageOps
+from flask import send_file
 
-# Загружаем переменные окружения из .env если есть
-load_dotenv()
-
-app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET', 'dev-secret')
-
-# Инициализация БД
-db.init_db()
+import auth_manager
+import db_manager
+import profile_manager
+import chat_manager
+import ai_core
 
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+def create_app() -> Flask:
+    app = Flask(__name__)
+    app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
+
+    # Init DB lazily (engine/session inside db_manager)
+    db_manager.init_db()
+
+    # Flask-Login setup
+    login_manager = LoginManager(app)
+    login_manager.login_view = "login"
+
+    @login_manager.user_loader
+    def load_user(user_id: str):
+        return auth_manager.get_user_by_id(user_id)
+
+    @app.route("/")
+    def index():
+        return render_template("index.html")
 
 
-@app.route('/auth')
-def auth_page():
-    return render_template('auth.html')
-
-
-@app.route('/register', methods=['POST'])
-def register():
-    # БЛОКИРОВКА РЕГИСТРАЦИИ (ВРЕМЕННО)
-    if os.environ.get('DISABLE_REGISTRATION', '').lower() in ('1', 'true', 'yes'):
-        return jsonify({'error': 'registrations are temporarily disabled'}), 403
-
-    # Простая регистрация по login + password
-    data = request.get_json(silent=True) or request.form or {}
-    login = (data.get('login') or '').strip()
-    password = data.get('password')
-    if not login or not password:
-        return jsonify({'error': 'login and password required'}), 400
-    if len(login) < 3 or len(login) > 64:
-        return jsonify({'error': 'login length must be between 3 and 64 chars'}), 400
-    if len(password) < 6:
-        return jsonify({'error': 'password too short (min 6 chars)'}), 400
-
-    existing = db.get_user(login)
-    if existing:
-        return jsonify({'error': 'user exists'}), 400
-
-    pw_hash = generate_password_hash(password)
-    try:
-        db.create_user(login, pw_hash)
-    except sqlite3.IntegrityError:
-        return jsonify({'error': 'user exists'}), 400
-    except Exception as e:
-        return jsonify({'error': 'failed to create user', 'detail': str(e)}), 500
-
-    return jsonify({'status': 'ok'})
-
-
-# Email verification removed in simplified flow
-
-
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.get_json(silent=True) or request.form or {}
-    login = (data.get('login') or '').strip()
-    password = data.get('password')
-    if not login or not password:
-        return jsonify({'error': 'login and password required'}), 400
-
-    user = db.get_user(login)
-    if not user:
-        return jsonify({'error': 'no such user'}), 400
-    if not check_password_hash(user['password_hash'], password):
-        return jsonify({'error': 'invalid credentials'}), 400
-
-    session['user'] = login
-    return jsonify({'status': 'ok'})
-
-
-@app.route('/logout', methods=['POST'])
-def logout():
-    session.pop('user', None)
-    return jsonify({'status': 'ok'})
-
-
-@app.route('/account')
-def account():
-    user_login = session.get('user')
-    if not user_login:
-        return redirect(url_for('auth_page'))
-    user = db.get_user(user_login)
-    avatar_url = None
-    if user and user.get('avatar_path'):
-        avatar_url = url_for('static', filename=user['avatar_path'].replace('static/', '')) if user['avatar_path'].startswith('static/') else url_for('static', filename=user['avatar_path'])
-    return render_template('account.html', login=user_login, display_name=user.get('display_name') if user else None, avatar_url=avatar_url)
-
-
-def _require_auth():
-    login = session.get('user')
-    if not login:
-        return None, (jsonify({'error': 'unauthorized'}), 401)
-    return login, None
-
-
-@app.route('/account/change_password', methods=['POST'])
-def change_password():
-    login, err = _require_auth()
-    if err:
-        return err
-    data = request.get_json(silent=True) or request.form or {}
-    old_password = data.get('old_password')
-    new_password = data.get('new_password')
-    if not old_password or not new_password:
-        return jsonify({'error': 'old_password and new_password are required'}), 400
-    if len(new_password) < 6:
-        return jsonify({'error': 'new_password too short (min 6 chars)'}), 400
-    user = db.get_user(login)
-    if not user or not check_password_hash(user['password_hash'], old_password):
-        return jsonify({'error': 'invalid old password'}), 400
-    db.update_password(login, generate_password_hash(new_password))
-    return jsonify({'status': 'ok'})
-
-
-@app.route('/account/display_name', methods=['POST'])
-def set_display_name():
-    login, err = _require_auth()
-    if err:
-        return err
-    data = request.get_json(silent=True) or request.form or {}
-    display_name = (data.get('display_name') or '').strip()
-    if len(display_name) > 80:
-        return jsonify({'error': 'display_name too long'}), 400
-    db.update_display_name(login, display_name or None)
-    return jsonify({'status': 'ok', 'display_name': display_name or None})
-
-
-def _ensure_avatar_dir() -> str:
-    root = os.path.dirname(__file__)
-    rel_dir = os.path.join('static', 'avatars')
-    abs_dir = os.path.join(root, rel_dir)
-    os.makedirs(abs_dir, exist_ok=True)
-    return abs_dir
-
-
-@app.route('/account/avatar', methods=['POST'])
-def upload_avatar():
-    login, err = _require_auth()
-    if err:
-        return err
-    if 'avatar' not in request.files:
-        return jsonify({'error': 'file field "avatar" is required'}), 400
-    file = request.files['avatar']
-    if file.filename == '':
-        return jsonify({'error': 'empty filename'}), 400
-    try:
-        img = Image.open(file.stream).convert('RGBA')
-    except Exception:
-        return jsonify({'error': 'invalid image'}), 400
-
-    # Приводим к 1024x1024, центр-кроп
-    target_size = (1024, 1024)
-    img = ImageOps.fit(img, target_size, Image.LANCZOS)
-
-    # Маска круга
-    mask = Image.new('L', target_size, 0)
-    mask_draw = Image.new('L', target_size, 0)
-    mask_draw_pil = Image.new('L', target_size, 0)
-    # Используем ImageDraw без отдельного импорта через ImageOps.expand трюк
-    from PIL import ImageDraw
-    d = ImageDraw.Draw(mask)
-    d.ellipse((0, 0, target_size[0], target_size[1]), fill=255)
-    img.putalpha(mask)
-
-    # Сохраняем
-    abs_dir = _ensure_avatar_dir()
-    filename = f"{login}.png"
-    abs_path = os.path.join(abs_dir, filename)
-    img.save(abs_path, format='PNG')
-
-    # Сохраним относительный путь для static
-    rel_path = os.path.join('avatars', filename).replace('\\', '/')
-    db.update_avatar_path(login, rel_path)
-    return jsonify({'status': 'ok', 'avatar_url': url_for('static', filename=rel_path)})
-
-
-@app.route('/account/delete', methods=['POST'])
-def delete_account():
-    login, err = _require_auth()
-    if err:
-        return err
-    # удалить аватар, если есть
-    user = db.get_user(login)
-    if user and user.get('avatar_path'):
-        path = user['avatar_path']
-        # поддержка как 'avatars/...' так и 'static/avatars/...'
-        if not path.startswith('static/'):
-            path = os.path.join('static', path)
-        abs_path = os.path.join(os.path.dirname(__file__), path)
+    @app.route("/random-cat")
+    def random_cat():
+        """Возвращает JSON с URL случайного кота (через ai_core.get_random_cat)."""
         try:
-            if os.path.exists(abs_path):
-                os.remove(abs_path)
+            cat_url = ai_core.get_random_cat()
         except Exception:
-            pass
-    db.delete_user(login)
-    session.pop('user', None)
-    return jsonify({'status': 'ok'})
+            return jsonify({"error": "Не удалось получить изображение кота"}), 500
+        return jsonify({"url": cat_url})
+
+    @app.route("/favcaticon.ico")
+    def favicon():
+        path = os.path.join(os.path.dirname(__file__), "favcaticon.ico")
+        if os.path.exists(path):
+            return send_file(path, mimetype="image/x-icon")
+        return redirect(url_for("index"))
+
+    # Placeholders for future routes per plan
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if request.method == "POST":
+            login_value = request.form.get("login", "").strip()
+            password = request.form.get("password", "")
+            if auth_manager.verify_login(login_value, password):
+                user = auth_manager.get_user_by_login(login_value)
+                if user:
+                    auth_manager.login_user_session(user)
+                    return redirect(url_for("platform"))
+            flash("Неверный логин или пароль", "error")
+        return render_template("login.html")
+
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        if request.method == "POST":
+            login_value = request.form.get("login", "").strip()
+            name = request.form.get("name", "").strip() or None
+            password = request.form.get("password", "")
+            if not login_value or not password:
+                flash("Укажите логин и пароль", "error")
+                return render_template("register.html")
+            ok = auth_manager.register_user(login_value, password, name)
+            if not ok:
+                flash("Такой логин уже существует", "error")
+                return render_template("register.html")
+            # Auto-login after successful registration
+            user = auth_manager.get_user_by_login(login_value)
+            if user:
+                auth_manager.login_user_session(user)
+                return redirect(url_for("platform"))
+        return render_template("register.html")
+
+    @app.route("/logout")
+    @login_required
+    def logout():
+        auth_manager.logout_user_session()
+        return redirect(url_for("index"))
+
+    @app.route("/profile", methods=["GET", "POST"])
+    @login_required
+    def profile():
+        if request.method == "POST":
+            updated = False
+            # Update name
+            new_name = request.form.get("name")
+            if new_name is not None and new_name.strip():
+                if profile_manager.update_name(int(current_user.id), new_name):
+                    updated = True
+            # Change password
+            old_pw = request.form.get("old_password", "")
+            new_pw = request.form.get("new_password", "")
+            if old_pw and new_pw:
+                if profile_manager.change_password(int(current_user.id), old_pw, new_pw):
+                    updated = True
+                else:
+                    flash("Неверный старый пароль", "error")
+            # Upload avatar
+            if "avatar" in request.files:
+                file = request.files["avatar"]
+                if file and file.filename:
+                    data = file.read()
+                    if not profile_manager.upload_avatar(int(current_user.id), data):
+                        flash("Ошибка загрузки аватара (ожидается PNG/JPG)", "error")
+                    else:
+                        updated = True
+            if updated:
+                flash("Изменения сохранены", "success")
+                return redirect(url_for("profile"))
+        return render_template("profile.html")
+
+    @app.route("/platform")
+    @login_required
+    def platform():
+        chats = chat_manager.list_chats(int(current_user.id))
+        return render_template("platform.html", chats=chats)
+
+    @app.route("/chat/new", methods=["POST", "GET"])
+    @login_required
+    def new_chat():
+        chat_id = chat_manager.create_chat(int(current_user.id))
+        return redirect(url_for("chat", chat_id=chat_id))
+
+    @app.route("/chat/<string:chat_id>", methods=["GET", "POST"])
+    @login_required
+    def chat(chat_id: str):
+        if request.method == "POST":
+            msg = request.form.get("message", "").strip()
+            if msg:
+                chat_manager.append_message(chat_id, role="user", content=msg)
+                # Generate AI reply and append
+                history_for_ai = chat_manager.get_chat_history(chat_id)
+                try:
+                    reply = ai_core.generate_reply(history_for_ai)
+                except Exception:
+                    reply = "Мяу... Похоже, мои двигатели перегрелись. Попробуйте ещё раз."
+                chat_manager.append_message(chat_id, role="assistant", content=reply)
+            return redirect(url_for("chat", chat_id=chat_id))
+        history = chat_manager.get_chat_history(chat_id)
+        return render_template("chat.html", chat_id=chat_id, history=history)
+
+    @app.route("/chat/<string:chat_id>/avatar")
+    @login_required
+    def chat_avatar(chat_id: str):
+        # Serve avatar blob as image/png
+        from flask import Response
+        for session in db_manager.get_session():
+            row = (
+                session.query(db_manager.Chat)
+                .filter(db_manager.Chat.chat_id == chat_id)
+                .first()
+            )
+            if not row or not row.cat_avatar_blob:
+                return Response(status=404)
+            return Response(row.cat_avatar_blob, mimetype="image/png")
+
+    return app
 
 
-# send-test-email removed — email sender is not used in simplified flow
+if __name__ == "__main__":
+    app = create_app()
+    app.run(host="0.0.0.0", port=5000, debug=True)
 
-
-if __name__ == '__main__':
-    app.run(debug=True)

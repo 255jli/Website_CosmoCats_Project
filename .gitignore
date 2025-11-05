@@ -1,7 +1,36 @@
-venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.build/
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables
 .env
-*.log
+.env.*
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS
 .DS_Store
-vscode/
+Thumbs.db
+
+# Model cache (optional configure via env)
+# hf_cache/
+
+# SQLite DB
+cosmocats.db
+
+# Private notes
+Private.md 
