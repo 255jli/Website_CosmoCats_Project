@@ -21,16 +21,15 @@ venv/
 # IDE/editor
 .vscode/
 .idea/
+vscode/
+idea/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Model cache (optional configure via env)
-# hf_cache/
-
 # SQLite DB
 cosmocats.db
 
-# Private notes
+model_cache/
 Private.md 
