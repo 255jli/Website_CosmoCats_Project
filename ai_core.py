@@ -21,7 +21,7 @@ def _ensure_loaded() -> None:
     with _lock:
         if _model is not None and _tokenizer is not None:
             return
-        model_name = "sberbank-ai/rugpt3small_basedon_gpt2"
+        model_name = "ai-forever/rugpt3small_based_on_gpt2"
         model_dir = os.environ.get("MODEL_DIR", os.path.join(os.path.dirname(__file__), "model_cache"))
         os.makedirs(model_dir, exist_ok=True)
         
