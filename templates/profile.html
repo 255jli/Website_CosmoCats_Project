@@ -2,13 +2,28 @@
 {% block content %}
 <h2>Профиль</h2>
 <form method="post" enctype="multipart/form-data">
-  <label>Имя<input name="name" placeholder="Ваше имя"></label>
+  <label>
+    Имя
+    <input name="name" value="{{ current_user.name }}" placeholder="Ваше имя">
+  </label>
+
   <fieldset>
     <legend>Смена пароля</legend>
-    <label>Старый пароль<input name="old_password" type="password" autocomplete="current-password"></label>
-    <label>Новый пароль<input name="new_password" type="password" autocomplete="new-password"></label>
+    <label>
+      Старый пароль
+      <input name="old_password" type="password" autocomplete="current-password">
+    </label>
+    <label>
+      Новый пароль
+      <input name="new_password" type="password" autocomplete="new-password">
+    </label>
   </fieldset>
-  <label>Аватар (PNG/JPG 1024x1024)<input name="avatar" type="file" accept="image/png,image/jpeg"></label>
-  <button class="btn btn-primary" type="submit">Сохранить изменения</button>
-{% endblock %}
 
+  <label>
+    Аватар (PNG/JPG, будет обрезано до 1024×1024)
+    <input name="avatar" type="file" accept="image/png,image/jpeg">
+  </label>
+
+  <button class="btn btn-primary" type="submit">Сохранить изменения</button>
+</form>
+{% endblock %}

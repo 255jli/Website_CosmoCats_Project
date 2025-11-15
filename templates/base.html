@@ -7,33 +7,50 @@
     <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="theme-dark">
+<body>
     <header class="site-header">
         <div class="logo">CosmoCats</div>
-        <nav class="nav">
-            <a href="/">Главная</a>
-            <a href="/platform">Платформа</a>
-            {% if current_user.is_authenticated %}
-              <a href="/profile">Профиль</a>
-              <a href="/logout">Выход</a>
-            {% else %}
-              <a href="/login">Войти</a>
-            {% endif %}
-        </nav>
     </header>
+
     <main class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <ul class="flashes">
-              {% for category, message in messages %}
-                <li class="flash {{ category }}">{{ message }}</li>
-              {% endfor %}
-            </ul>
-          {% endif %}
+            {% if messages %}
+                <ul class="flashes">
+                    {% for category, message in messages %}
+                        <li class="flash {{ category }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
         {% endwith %}
+
         {% block content %}{% endblock %}
     </main>
+
+    {% if current_user.is_authenticated %}
+        <!-- Кнопка смены темы -->
+        <button id="theme-toggle" aria-label="Переключить тему" class="theme-toggle-btn">
+            <span class="sun">☀️</span>
+            <span class="moon">🌙</span>
+        </button>
+
+        <!-- Круг (аватар или чёрный) -->
+        <div id="user-menu-trigger" class="user-menu-trigger" title="Меню">
+            <img id="user-avatar-img" src="" alt="Аватар пользователя" class="avatar-img">
+        </div>
+
+        <!-- Выпадающее меню -->
+        <div id="user-menu" class="user-menu hidden">
+            <a href="/">Главная</a>
+            <a id="profile-or-platform" href="#">Загрузка...</a>
+            <a href="/logout">Выход</a>
+        </div>
+
+        <!-- Передаём ID пользователя в JS -->
+        <script>
+            window.current_user_id = {{ current_user.id }};
+        </script>
+    {% endif %}
+
     <script src="/static/script.js"></script>
 </body>
 </html>
-

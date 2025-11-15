@@ -39,20 +39,11 @@ def get_database_url() -> str:
 
 
 def init_db(database_url: Optional[str] = None) -> None:
-    """Initialize engine and create tables if not exist."""
     global _engine, SessionLocal
     url = database_url or get_database_url()
     _engine = create_engine(url, future=True)
     SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False, future=True)
-    try:
-        Base.metadata.create_all(_engine)
-    except OperationalError as e:
-        msg = str(e).lower()
-        # Игнорируем известную ситуацию с дублирующимся индексом в sqlite
-        if "index ix_chats_user_id already exists" in msg or "already exists" in msg:
-            print("Warning: проблемы с созданием индекса в БД (уже существует) — пропускаю создание индексов.")
-        else:
-            raise
+    Base.metadata.create_all(_engine)
 
 
 @contextmanager
@@ -97,10 +88,6 @@ class Chat(Base):
 
     user: Mapped[User] = relationship(back_populates="chats")
 
-    __table_args__ = (
-        Index("ix_chats_user_id", "user_id"),
-    )
-
 
 # --- Helper utils for chat history serialization ---
 
@@ -114,7 +101,5 @@ def deserialize_history(blob: Optional[bytes]) -> List[Dict[str, Any]]:
         return []
     try:
         return json.loads(blob.decode("utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return []
-
-

@@ -1,22 +1,50 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Чат {{ chat_id }}</h2>
-<div style="margin-bottom: 1rem;">
-  <img src="/chat/{{ chat_id }}/avatar" alt="cat avatar" style="width:96px;height:96px;border-radius:50%;background:#111;">
-  <a class="btn btn-secondary" href="/platform" style="margin-left:1rem">Назад к списку</a>
-</div>
-<div id="chat-history" class="chat-history">
-  {% for m in history %}
-    <div class="msg {{ m.role }}">
-      <strong>{{ m.role }}:</strong> {{ m.content }}
+<section aria-labelledby="chat-title">
+  <h2 id="chat-title">Чат {{ chat_id }}</h2>
+
+  <!-- Аватар чата и кнопка "Назад" -->
+  <div class="chat-header">
+    <div class="chat-avatar-wrapper">
+      <img 
+        src="/chat/{{ chat_id }}/avatar?v={{ chat_id }}"
+        alt="Аватар чата"
+        width="96"
+        height="96"
+        class="chat-avatar"
+        loading="lazy"
+        onerror="this.style.display='none'"
+      >
     </div>
-  {% else %}
-    <div>История пуста</div>
-  {% endfor %}
-  <form method="post" style="margin-top:1rem">
-    <input name="message" placeholder="Напишите сообщение..." required>
+    <a class="btn btn-secondary" href="/platform">Назад к списку</a>
+  </div>
+
+  <!-- История сообщений -->
+  <div id="chat-history" class="chat-history" role="log" aria-live="polite" aria-label="История переписки">
+    {% if history %}
+      {% for m in history %}
+        <div class="msg {{ m.role }}" aria-label="{{ 'Пользователь' if m.role == 'user' else 'Космокот' }}: {{ m.content | striptags }}">
+          <strong>{{ 'Пользователь' if m.role == 'user' else 'Космокот' }}:</strong>
+          {{ m.content }}
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="msg empty">История пуста</div>
+    {% endif %}
+  </div>
+
+  <!-- Форма отправки сообщения -->
+  <form method="post" class="chat-form" novalidate>
+    <input 
+      type="text"
+      name="message"
+      id="message-input"
+      placeholder="Напишите сообщение..."
+      required
+      autocomplete="off"
+      aria-label="Введите сообщение"
+    >
     <button class="btn btn-primary" type="submit">Отправить</button>
   </form>
-</div>
+</section>
 {% endblock %}
-

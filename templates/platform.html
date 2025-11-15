@@ -1,17 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Мои чаты</h2>
-<div class="actions">
-  <form method="post" action="/chat/new" style="display:inline-block">
-    <button class="btn btn-primary" type="submit">+ Новый чат</button>
-  </form>
-  <a class="btn btn-secondary" href="/logout">Выход</a>
-<ul>
-  {% for c in chats %}
-    <li><a href="/chat/{{ c.chat_id }}">Чат {{ c.chat_id }}</a></li>
-  {% else %}
-    <li>Чатов пока нет</li>
-  {% endfor %}
-</ul>
-{% endblock %}
+<section aria-labelledby="platform-title">
+  <h2 id="platform-title">Мои чаты</h2>
 
+  <div class="actions">
+    <form method="post" action="/chat/new">
+      <button class="btn btn-primary" type="submit">+ Новый чат</button>
+    </form>
+    <a class="btn btn-secondary" href="/logout">Выход</a>
+  </div>
+
+  {% if chats %}
+    <ul class="chat-list" aria-label="Список чатов">
+      {% for c in chats %}
+        <li>
+          <a href="/chat/{{ c.chat_id }}">
+            Чат {{ c.chat_id }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty-state">Чатов пока нет</p>
+  {% endif %}
+</section>
+{% endblock %}

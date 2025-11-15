@@ -18,21 +18,40 @@ def _load_chat(session, chat_id: str) -> Optional[db_manager.Chat]:
 
 
 def _fetch_cat_image_bytes() -> Optional[bytes]:
+    """Загружает изображение кота напрямую с TheCatAPI."""
     try:
-        api_key = os.environ.get("CAT_API_KEY", "")
-        headers = {"x-api-key": api_key} if api_key else {}
-        resp = requests.get("https://api.thecatapi.com/v1/images/search", headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if not data:
+        # Шаг 1: Получаем URL изображения
+        search_url = "https://api.thecatapi.com/v1/images/search"
+        search_resp = requests.get(search_url, timeout=30)
+        search_resp.raise_for_status()
+        data = search_resp.json()
+        
+        if not data or not isinstance(data, list) or len(data) == 0:
+            print("API вернул пустой ответ")
             return None
+            
         img_url = data[0].get("url")
         if not img_url:
+            print("Нет URL в ответе")
             return None
-        img_resp = requests.get(img_url, timeout=20)
+
+        # Шаг 2: Загружаем изображение
+        img_resp = requests.get(img_url, timeout=30)
         img_resp.raise_for_status()
+
+        # Проверим, что это действительно изображение
+        content_type = img_resp.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            print(f"Не изображение: {content_type}")
+            return None
+
         return img_resp.content
-    except Exception:
+
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка сети при загрузке кота: {e}")
+        return None
+    except Exception as e:
+        print(f"Неизвестная ошибка при загрузке кота: {e}")
         return None
 
 
@@ -60,9 +79,10 @@ def _circle_crop(image_bytes: bytes, size: int = 512) -> Optional[bytes]:
 def create_chat(user_id: int) -> str:
     chat_id = uuid.uuid4().hex[:16]
     with db_manager.get_session() as session:
-        cat_bytes = _fetch_cat_image_bytes()
+        cat_bytes = _fetch_cat_image_bytes()  # ← делает прямой запрос
         circle_bytes = _circle_crop(cat_bytes) if cat_bytes else None
         if not circle_bytes:
+            # Только если всё сломалось — ставим дефолт
             with open("assets/default_avatar.png", "rb") as f:
                 circle_bytes = f.read()
         chat = db_manager.Chat(
@@ -72,7 +92,7 @@ def create_chat(user_id: int) -> str:
             cat_avatar_blob=circle_bytes,
         )
         session.add(chat)
-        return chat_id
+    return chat_id
 
 
 def list_chats(user_id: int) -> List[Dict[str, str]]:
@@ -95,8 +115,7 @@ def get_chat_history(chat_id: str) -> List[Dict]:
         chat = _load_chat(session, chat_id)
         if not chat:
             return []
-        return db_manager.deserialize_history(chat.chat_history)
-
+    return db_manager.deserialize_history(chat.chat_history)
 
 
 def append_message(chat_id: str, role: str, content: str) -> None:

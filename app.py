@@ -153,15 +153,16 @@ def create_app() -> Flask:
         history = chat_manager.get_chat_history(chat_id)
         return render_template("chat.html", chat_id=chat_id, history=history)
 
-    @app.route("/chat/<string:chat_id>/avatar")
+    @app.route("/user/<int:user_id>/avatar")
     @login_required
-    def chat_avatar(chat_id: str):
+    def user_avatar(user_id: int):
+        if current_user.id != user_id:
+            return "", 403
+        avatar_blob = profile_manager.get_user_avatar(user_id)
+        if not avatar_blob:
+            return "", 204  # Нет контента
         from flask import Response
-        with db_manager.get_session() as session:
-            row = session.query(db_manager.Chat).filter(db_manager.Chat.chat_id == chat_id).first()
-            if not row or not row.cat_avatar_blob:
-                return Response(status=404)
-            return Response(row.cat_avatar_blob, mimetype="image/png")
+        return Response(avatar_blob, mimetype="image/png")
 
 
     return app

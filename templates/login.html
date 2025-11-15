@@ -2,10 +2,13 @@
 {% block content %}
 <h2>Вход</h2>
 <form method="post">
-  <label>Логин<input name="login" autocomplete="username" required></label>
-  <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+  <label for="login">Логин</label>
+  <input id="login" name="login" type="text" autocomplete="username" required>
+
+  <label for="password">Пароль</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" required>
+
   <button class="btn btn-primary" type="submit">Войти</button>
   <a class="btn btn-link" href="/register">Создать аккаунт</a>
 </form>
 {% endblock %}
-

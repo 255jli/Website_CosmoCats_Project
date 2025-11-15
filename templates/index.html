@@ -15,7 +15,16 @@
         </nav>
     </header>
     <main class="container">
-        <button id="fetch-cat-btn" class="btn btn-primary">Показать случайного кота</button>
+        <section class="hero">
+            <button type="button" id="fetch-cat-btn" class="btn btn-primary" aria-label="Показать случайного кота">
+                Показать случайного кота
+            </button>
+            <img 
+                id="random-cat-img" 
+                alt="Случайный кот" 
+                style="display: none; max-width: 100%; margin-top: 20px; border-radius: 12px;"
+            >
+        </section>
     </main>
     <script src="/static/script.js"></script>
 </body>

@@ -30,7 +30,7 @@ def register_user(login: str, password: str, name: Optional[str] = None) -> bool
         password_hash = generate_password_hash(password)
         user = db_manager.User(login=login, password_hash=password_hash, name=name)
         session.add(user)
-        return True
+    return True
 
 
 def verify_login(login: str, password: str) -> bool:
@@ -42,7 +42,6 @@ def verify_login(login: str, password: str) -> bool:
 
 
 def get_user_by_id(user_id: str | int) -> Optional[AuthUser]:
-    """Load user by numeric id as AuthUser for Flask-Login."""
     try:
         uid = int(user_id)
     except Exception:
