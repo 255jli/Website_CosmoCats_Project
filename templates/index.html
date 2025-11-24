@@ -1,31 +1,167 @@
-<!doctype html>
-<html lang="ru">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CosmoCats</title>
-    <link rel="icon" href="/favicon.ico">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body class="theme-dark">
-    <header class="site-header">
-        <div class="logo">CosmoCats</div>
-        <nav class="nav">
-            <a href="/platform">Платформа</a>
-        </nav>
-    </header>
-    <main class="container">
-        <section class="hero">
-            <button type="button" id="fetch-cat-btn" class="btn btn-primary" aria-label="Показать случайного кота">
-                Показать случайного кота
+{% extends "base.html" %}
+
+{% block title %}Космокот - Космический помощник{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="hero-content">
+        <div class="hero-badge">
+            <span>🚀 Новое поколение ИИ-помощников</span>
+        </div>
+        
+        <h1 class="hero-title">
+            Знакомьтесь с 
+            <span class="gradient-text">Космокотом</span>
+        </h1>
+        
+        <p class="hero-description">
+            Ваш космический помощник с характером милого котика. 
+            Отвечает на вопросы, помогает с задачами и всегда поднимает настроение!
+        </p>
+
+        <div class="hero-actions">
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('platform') }}" class="btn btn-primary btn-large">
+                    💬 Перейти к чатам
+                </a>
+                <a href="{{ url_for('chat', chat_id='new') }}" class="btn btn-outline btn-large">
+                    🚀 Новый чат
+                </a>
+            {% else %}
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-large">
+                    Начать путешествие
+                </a>
+                <a href="{{ url_for('login') }}" class="btn btn-outline btn-large">
+                    Уже есть аккаунт
+                </a>
+            {% endif %}
+        </div>
+
+        <div class="hero-stats">
+            <div class="stat">
+                <div class="stat-number">∞</div>
+                <div class="stat-label">Знаний</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">Котичность</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">24/7</div>
+                <div class="stat-label">Доступность</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hero-visual">
+        <div class="floating-cat">
+            <div class="cat-body">🐱</div>
+            <div class="cat-spacesuit">🚀</div>
+            <div class="stars">
+                <span class="star">⭐</span>
+                <span class="star">🌟</span>
+                <span class="star">💫</span>
+                <span class="star">☄️</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="features-section">
+    <div class="container">
+        <h2 class="section-title">Почему Космокот?</h2>
+        
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3>Умный ИИ</h3>
+                <p>Основан на современной языковой модели, понимает контекст и отвечает осмысленно</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">😺</div>
+                <h3>Характер котика</h3>
+                <p>Общается с юмором, добавляет "мяу" и создает уютную атмосферу</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🚀</div>
+                <h3>Космическая тема</h3>
+                <p>Погружает в атмосферу космоса и межзвездных путешествий</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">💾</div>
+                <h3>История чатов</h3>
+                <p>Сохраняет все ваши беседы для продолжения в любой момент</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>Безопасность</h3>
+                <p>Ваши данные защищены и не передаются третьим лицам</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3>Красивый дизайн</h3>
+                <p>Интуитивный и современный интерфейс с темной темой</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="demo-section">
+    <div class="container">
+        <h2 class="section-title">Попробуйте прямо сейчас</h2>
+        
+        <div class="demo-container">
+            <div class="demo-chat">
+                <div class="demo-message user-message">
+                    <div class="message-avatar">👤</div>
+                    <div class="message-content">
+                        <div class="message-text">Привет! Что ты умеешь?</div>
+                    </div>
+                </div>
+                
+                <div class="demo-message assistant-message">
+                    <div class="message-avatar">🐱</div>
+                    <div class="message-content">
+                        <div class="message-text">
+                            Мяу! Я Космокот - твой космический помощник! 
+                            Отвечаю на вопросы, помогаю с задачами и поднимаю настроение. 
+                            Что тебя интересует? 🚀
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="demo-actions">
+                {% if not current_user.is_authenticated %}
+                    <a href="{{ url_for('register') }}" class="btn btn-primary btn-large">
+                        Присоединиться к космической команде
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cat-generator">
+    <div class="container">
+        <h2 class="section-title">Случайный космокот</h2>
+        <div class="cat-generator-content">
+            <div class="cat-image-container">
+                <img id="random-cat-img" src="" alt="Случайный котик" style="display: none;">
+                <div class="cat-placeholder" id="cat-placeholder">
+                    <span>🐱</span>
+                    <p>Нажмите кнопку для генерации котика</p>
+                </div>
+            </div>
+            <button class="btn btn-primary" id="fetch-cat-btn">
+                Сгенерировать котика
             </button>
-            <img 
-                id="random-cat-img" 
-                alt="Случайный кот" 
-                style="display: none; max-width: 100%; margin-top: 20px; border-radius: 12px;"
-            >
-        </section>
-    </main>
-    <script src="/static/script.js"></script>
-</body>
-</html>
+        </div>
+    </div>
+</section>
+{% endblock %}

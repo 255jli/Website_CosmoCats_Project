@@ -3,6 +3,7 @@ from typing import Optional, Iterator, List, Dict, Any
 from contextlib import contextmanager
 import os
 import json
+from datetime import datetime
 
 from sqlalchemy import (
     create_engine,
@@ -10,9 +11,9 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     ForeignKey,
-    Index,
+    Text,
+    DateTime
 )
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -22,21 +23,14 @@ from sqlalchemy.orm import (
     Session,
 )
 
-
-# --- SQLAlchemy base and engine/session factories ---
-
-
 class Base(DeclarativeBase):
     pass
-
 
 _engine = None
 SessionLocal: sessionmaker[Session] | None = None
 
-
 def get_database_url() -> str:
     return os.environ.get("DATABASE_URL", "sqlite:///cosmocats.db")
-
 
 def init_db(database_url: Optional[str] = None) -> None:
     global _engine, SessionLocal
@@ -44,7 +38,6 @@ def init_db(database_url: Optional[str] = None) -> None:
     _engine = create_engine(url, future=True)
     SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False, future=True)
     Base.metadata.create_all(_engine)
-
 
 @contextmanager
 def get_session() -> Iterator[Session]:
@@ -61,10 +54,6 @@ def get_session() -> Iterator[Session]:
     finally:
         session.close()
 
-
-# --- Models ---
-
-
 class User(Base):
     __tablename__ = "users"
 
@@ -76,7 +65,6 @@ class User(Base):
 
     chats: Mapped[List["Chat"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
-
 class Chat(Base):
     __tablename__ = "chats"
 
@@ -85,16 +73,13 @@ class Chat(Base):
     chat_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     chat_history: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     cat_avatar_blob: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    icon_blob: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="chats")
 
-
-# --- Helper utils for chat history serialization ---
-
-
 def serialize_history(messages: List[Dict[str, Any]]) -> bytes:
     return json.dumps(messages, ensure_ascii=False).encode("utf-8")
-
 
 def deserialize_history(blob: Optional[bytes]) -> List[Dict[str, Any]]:
     if not blob:

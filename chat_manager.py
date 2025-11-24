@@ -5,128 +5,265 @@ import os
 import requests
 from io import BytesIO
 from PIL import Image, ImageDraw
+import random
+import base64
 
-import db_manager
-
-
-def _load_chat(session, chat_id: str) -> Optional[db_manager.Chat]:
-    return (
-        session.query(db_manager.Chat)
-        .filter(db_manager.Chat.chat_id == chat_id)
-        .first()
-    )
+from db_manager import get_session, Chat, serialize_history, deserialize_history
+from ai_core import generate_chat_title
 
 
 def _fetch_cat_image_bytes() -> Optional[bytes]:
-    """Загружает изображение кота напрямую с TheCatAPI."""
+    """Получить изображение кота с aleatori.cat"""
     try:
-        # Шаг 1: Получаем URL изображения
-        search_url = "https://api.thecatapi.com/v1/images/search"
-        search_resp = requests.get(search_url, timeout=30)
-        search_resp.raise_for_status()
-        data = search_resp.json()
+        # Получаем JSON с информацией о случайном коте
+        url = "https://aleatori.cat/random.json"
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
         
-        if not data or not isinstance(data, list) or len(data) == 0:
-            print("API вернул пустой ответ")
-            return None
-            
-        img_url = data[0].get("url")
-        if not img_url:
-            print("Нет URL в ответе")
-            return None
-
-        # Шаг 2: Загружаем изображение
-        img_resp = requests.get(img_url, timeout=30)
+        # Берем URL изображения из ответа
+        img_url = data["url"]
+        
+        # Загружаем само изображение
+        img_resp = requests.get(img_url, timeout=10)
         img_resp.raise_for_status()
-
-        # Проверим, что это действительно изображение
-        content_type = img_resp.headers.get("Content-Type", "")
-        if not content_type.startswith("image/"):
-            print(f"Не изображение: {content_type}")
-            return None
-
-        return img_resp.content
-
-    except requests.exceptions.RequestException as e:
-        print(f"Ошибка сети при загрузке кота: {e}")
-        return None
+        
+        # Проверяем, что это действительно изображение
+        if img_resp.headers.get('content-type', '').startswith('image/'):
+            return img_resp.content
+        else:
+            print("❌ Полученные данные не являются изображением")
+            return _load_default_avatar()
+            
     except Exception as e:
-        print(f"Неизвестная ошибка при загрузке кота: {e}")
+        print(f"❌ Ошибка получения кота с aleatori.cat: {e}")
+        return _load_default_avatar()
+
+
+def _load_default_avatar() -> Optional[bytes]:
+    """Загрузить default_avatar.png из папки assets"""
+    try:
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), "assets", "default_avatar.png"),
+            os.path.join(os.path.dirname(__file__), "..", "assets", "default_avatar.png"),
+            os.path.join(os.getcwd(), "assets", "default_avatar.png"),
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    print(f"✅ Загружен default_avatar.png: {path}")
+                    return f.read()
+        
+        print("❌ default_avatar.png не найден, создаем базовый аватар")
+        return _generate_basic_avatar()
+        
+    except Exception as e:
+        print(f"❌ Ошибка загрузки default_avatar.png: {e}")
+        return _generate_basic_avatar()
+
+
+def _generate_basic_avatar() -> bytes:
+    """Создать простой аватар если все остальное не удалось"""
+    try:
+        size = 500
+        colors = [
+            (255, 200, 200), (200, 255, 200), (200, 200, 255),
+            (255, 255, 200), (255, 200, 255), (200, 255, 255)
+        ]
+        bg_color = random.choice(colors)
+        
+        img = Image.new('RGB', (size, size), color=bg_color)
+        draw = ImageDraw.Draw(img)
+        
+        # Рисуем простой круг с кошачьими ушками
+        face_color = (random.randint(200, 255), random.randint(200, 255), random.randint(200, 255))
+        draw.ellipse([50, 50, 450, 450], fill=face_color)
+        
+        # Глаза
+        eye_color = random.choice(['green', 'blue', 'yellow', 'orange'])
+        draw.ellipse([150, 200, 200, 250], fill=eye_color)
+        draw.ellipse([300, 200, 350, 250], fill=eye_color)
+        
+        # Нос
+        draw.ellipse([225, 275, 275, 325], fill='pink')
+        
+        # Усики
+        for i in range(3):
+            y = 300 + i * 20
+            draw.line([200, y, 100, y-30], fill='black', width=3)
+            draw.line([300, y, 400, y-30], fill='black', width=3)
+        
+        out = BytesIO()
+        img.save(out, format='PNG')
+        return out.getvalue()
+        
+    except Exception as e:
+        print(f"❌ Ошибка генерации базового аватара: {e}")
+        img = Image.new('RGB', (100, 100), color='gray')
+        out = BytesIO()
+        img.save(out, format='PNG')
+        return out.getvalue()
+
+
+def get_chat_avatar(chat_id: str) -> Optional[bytes]:
+    """Получить аватар чата по его ID"""
+    with get_session() as session:
+        chat = session.query(Chat).filter_by(chat_id=chat_id).first()
+        if chat and chat.cat_avatar_blob:
+            return chat.cat_avatar_blob
         return None
 
 
-def _circle_crop(image_bytes: bytes, size: int = 512) -> Optional[bytes]:
+def update_chat_avatar(chat_id: str, avatar_blob: bytes) -> None:
+    """Обновить аватар чата"""
+    with get_session() as session:
+        chat = session.query(Chat).filter_by(chat_id=chat_id).first()
+        if chat:
+            chat.cat_avatar_blob = avatar_blob
+            session.commit()
+
+
+def _load_chat(session, chat_id: str) -> Optional[Chat]:
+    """Загрузить чат из базы данных"""
+    return session.query(Chat).filter(Chat.chat_id == chat_id).first()
+
+
+def _circle_crop(image_bytes: bytes, size: int = 500) -> Optional[bytes]:
+    """Обрезает изображение по ширине до квадрата, масштабирует до нужного размера и делает круглую обрезку"""
     try:
         with Image.open(BytesIO(image_bytes)) as im:
-            im = im.convert("RGB")
+            if im.mode != 'RGB':
+                im = im.convert('RGB')
+            
             w, h = im.size
             side = min(w, h)
             left = (w - side) // 2
             top = (h - side) // 2
-            im = im.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
+            im = im.crop((left, top, left + side, top + side))
+            
+            im = im.resize((size, size), Image.LANCZOS)
+            
             mask = Image.new("L", (size, size), 0)
             draw = ImageDraw.Draw(mask)
             draw.ellipse((0, 0, size, size), fill=255)
+            
             im = im.convert("RGBA")
             im.putalpha(mask)
+            
             out = BytesIO()
-            im.save(out, format="PNG")
+            im.save(out, format="PNG", optimize=True)
             return out.getvalue()
-    except Exception:
+            
+    except Exception as e:
+        print(f"❌ Ошибка при обработке изображения: {e}")
         return None
 
 
-def create_chat(user_id: int) -> str:
+def create_chat(user_id: int, first_message: str = None) -> str:
+    """Создать новый чат с аватаром кота и сгенерированным названием"""
     chat_id = uuid.uuid4().hex[:16]
-    with db_manager.get_session() as session:
-        cat_bytes = _fetch_cat_image_bytes()  # ← делает прямой запрос
-        circle_bytes = _circle_crop(cat_bytes) if cat_bytes else None
+    
+    with get_session() as session:
+        # Получаем аватар кота
+        cat_bytes = _fetch_cat_image_bytes()
+        circle_bytes = _circle_crop(cat_bytes, 500) if cat_bytes else None
+        
         if not circle_bytes:
-            # Только если всё сломалось — ставим дефолт
-            with open("assets/default_avatar.png", "rb") as f:
-                circle_bytes = f.read()
-        chat = db_manager.Chat(
+            default_avatar = _load_default_avatar()
+            circle_bytes = _circle_crop(default_avatar, 500) if default_avatar else None
+        
+        if not circle_bytes:
+            basic_avatar = _generate_basic_avatar()
+            circle_bytes = _circle_crop(basic_avatar, 500)
+        
+        # Создаем иконку (маленький аватар 64x64)
+        icon_bytes = _circle_crop(circle_bytes, 64) if circle_bytes else None
+        
+        # Генерируем название чата
+        if first_message:
+            title = generate_chat_title(first_message)
+        else:
+            title = "Новый чат с Космокотом"
+        
+        chat = Chat(
             user_id=user_id,
             chat_id=chat_id,
-            chat_history=db_manager.serialize_history([]),
+            chat_history=serialize_history([]),
             cat_avatar_blob=circle_bytes,
+            title=title,
+            icon_blob=icon_bytes,
         )
         session.add(chat)
-    return chat_id
+        session.commit()
+        
+        print(f"✅ Создан чат '{title}' ({chat_id}) для пользователя {user_id}")
+        return chat_id
 
 
-def list_chats(user_id: int) -> List[Dict[str, str]]:
-    result: List[Dict[str, str]] = []
-    with db_manager.get_session() as session:
+def list_chats(user_id: int) -> List[Dict[str, any]]:
+    """Получить список чатов пользователя с иконками и названиями"""
+    result: List[Dict[str, any]] = []
+    with get_session() as session:
         rows = (
-            session.query(db_manager.Chat)
-            .filter(db_manager.Chat.user_id == user_id)
-            .order_by(db_manager.Chat.id.desc())
+            session.query(Chat)
+            .filter(Chat.user_id == user_id)
+            .order_by(Chat.id.desc())
             .all()
         )
         for c in rows:
-            result.append({"chat_id": c.chat_id})
+            # Конвертируем иконку в base64 для фронтенда
+            icon_base64 = None
+            if c.icon_blob:
+                icon_base64 = base64.b64encode(c.icon_blob).decode('utf-8')
+            
+            result.append({
+                "chat_id": c.chat_id,
+                "title": c.title or "Чат с Космокотом",
+                "icon": icon_base64
+            })
     return result
 
 
+def get_chat_info(chat_id: str) -> Optional[Dict[str, any]]:
+    """Получить информацию о чате (название, иконка)"""
+    with get_session() as session:
+        chat = _load_chat(session, chat_id)
+        if not chat:
+            return None
+            
+        icon_base64 = None
+        if chat.icon_blob:
+            icon_base64 = base64.b64encode(chat.icon_blob).decode('utf-8')
+            
+        return {
+            "chat_id": chat.chat_id,
+            "title": chat.title or "Чат с Космокотом",
+            "icon": icon_base64
+        }
+
 
 def get_chat_history(chat_id: str) -> List[Dict]:
-    with db_manager.get_session() as session:
+    """Получить историю сообщений чата"""
+    with get_session() as session:
         chat = _load_chat(session, chat_id)
         if not chat:
             return []
-    return db_manager.deserialize_history(chat.chat_history)
+    return deserialize_history(chat.chat_history)
 
 
 def append_message(chat_id: str, role: str, content: str) -> None:
-    with db_manager.get_session() as session:
+    """Добавить сообщение в историю чата"""
+    with get_session() as session:
         chat = _load_chat(session, chat_id)
         if not chat:
             return
-        history = db_manager.deserialize_history(chat.chat_history)
+            
+        history = deserialize_history(chat.chat_history)
         history.append({"role": role, "content": content})
 
         def _prune_history(hist: List[Dict]) -> List[Dict]:
+            """Ограничить историю последними 5 парами сообщений пользователь-ассистент"""
             picked_rev = []
             user_count = 0
             assistant_count = 0
@@ -143,12 +280,20 @@ def append_message(chat_id: str, role: str, content: str) -> None:
             return list(reversed(picked_rev))
 
         pruned = _prune_history(history)
-        chat.chat_history = db_manager.serialize_history(pruned)
+        chat.chat_history = serialize_history(pruned)
+        session.commit()
 
 
 def clear_history(chat_id: str) -> None:
-    with db_manager.get_session() as session:
+    """Очистить историю сообщений чата"""
+    with get_session() as session:
         chat = _load_chat(session, chat_id)
         if not chat:
             return
-        chat.chat_history = db_manager.serialize_history([])
+        chat.chat_history = serialize_history([])
+        session.commit()
+
+
+def process_avatar(image_bytes: bytes, size: int = 500) -> Optional[bytes]:
+    """Обработать аватар - круглая обрезка"""
+    return _circle_crop(image_bytes, size)

@@ -1,14 +1,66 @@
 {% extends "base.html" %}
+
+{% block title %}Вход - Космокот{% endblock %}
+
 {% block content %}
-<h2>Вход</h2>
-<form method="post">
-  <label for="login">Логин</label>
-  <input id="login" name="login" type="text" autocomplete="username" required>
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h1>С возвращением! 🚀</h1>
+            <p>Рады видеть вас снова в космическом пространстве Космокота</p>
+        </div>
 
-  <label for="password">Пароль</label>
-  <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <form method="POST" class="auth-form">
+            <div class="form-group">
+                <label for="login" class="form-label">Логин</label>
+                <input type="text" 
+                       id="login" 
+                       name="login" 
+                       class="form-input"
+                       placeholder="Введите ваш логин"
+                       value="{{ request.form.login or '' }}"
+                       required>
+            </div>
 
-  <button class="btn btn-primary" type="submit">Войти</button>
-  <a class="btn btn-link" href="/register">Создать аккаунт</a>
-</form>
+            <div class="form-group">
+                <label for="password" class="form-label">Пароль</label>
+                <input type="password" 
+                       id="password" 
+                       name="password" 
+                       class="form-input"
+                       placeholder="Введите ваш пароль"
+                       required>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full">
+                Войти в систему
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            <p>Еще нет аккаунта? 
+                <a href="{{ url_for('register') }}" class="auth-link">
+                    Зарегистрироваться
+                </a>
+            </p>
+            <p>
+                <a href="{{ url_for('index') }}" class="auth-link">
+                    ← Вернуться на главную
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <div class="auth-visual">
+        <div class="floating-astronaut">
+            <div class="astronaut">👨‍🚀</div>
+            <div class="planet">🪐</div>
+            <div class="stars">
+                <span class="star">⭐</span>
+                <span class="star">🌟</span>
+                <span class="star">✨</span>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

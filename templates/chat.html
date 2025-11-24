@@ -1,50 +1,218 @@
 {% extends "base.html" %}
+
+{% block title %}Чат с Космокотом{% endblock %}
+
 {% block content %}
-<section aria-labelledby="chat-title">
-  <h2 id="chat-title">Чат {{ chat_id }}</h2>
-
-  <!-- Аватар чата и кнопка "Назад" -->
-  <div class="chat-header">
-    <div class="chat-avatar-wrapper">
-      <img 
-        src="/chat/{{ chat_id }}/avatar?v={{ chat_id }}"
-        alt="Аватар чата"
-        width="96"
-        height="96"
-        class="chat-avatar"
-        loading="lazy"
-        onerror="this.style.display='none'"
-      >
-    </div>
-    <a class="btn btn-secondary" href="/platform">Назад к списку</a>
-  </div>
-
-  <!-- История сообщений -->
-  <div id="chat-history" class="chat-history" role="log" aria-live="polite" aria-label="История переписки">
-    {% if history %}
-      {% for m in history %}
-        <div class="msg {{ m.role }}" aria-label="{{ 'Пользователь' if m.role == 'user' else 'Космокот' }}: {{ m.content | striptags }}">
-          <strong>{{ 'Пользователь' if m.role == 'user' else 'Космокот' }}:</strong>
-          {{ m.content }}
+<div class="chat-container">
+    <div class="chat-header">
+        <a href="{{ url_for('platform') }}" class="back-button">
+            ← К чатам
+        </a>
+        
+        <div class="chat-info">
+            <div class="chat-avatar">
+                {% if chat_info and chat_info.icon %}
+                    <img src="data:image/png;base64,{{ chat_info.icon }}" alt="{{ chat_info.title }}">
+                {% else %}
+                    <img src="{{ url_for('chat_avatar', chat_id=chat_id) }}" alt="Аватар чата" onerror="this.style.display='none'">
+                    <span class="avatar-fallback">🐱</span>
+                {% endif %}
+            </div>
+            <div class="chat-details">
+                <div class="chat-title">{{ chat_info.title if chat_info else "Чат с Космокотом" }}</div>
+                <div class="chat-status">
+                    <span class="status-dot"></span>
+                    Космокот онлайн
+                </div>
+            </div>
         </div>
-      {% endfor %}
-    {% else %}
-      <div class="msg empty">История пуста</div>
-    {% endif %}
-  </div>
 
-  <!-- Форма отправки сообщения -->
-  <form method="post" class="chat-form" novalidate>
-    <input 
-      type="text"
-      name="message"
-      id="message-input"
-      placeholder="Напишите сообщение..."
-      required
-      autocomplete="off"
-      aria-label="Введите сообщение"
-    >
-    <button class="btn btn-primary" type="submit">Отправить</button>
-  </form>
-</section>
+        <div class="chat-actions">
+            <form method="POST" action="{{ url_for('new_chat') }}" style="display: inline;">
+                <button type="submit" class="btn btn-outline btn-small">
+                    + Новый чат
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="chat-container">
+    
+    <div class="chat-messages" id="chat-history">
+        {% for message in history %}
+            <div class="message {% if message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                <div class="message-avatar">
+                    {% if message.role == 'user' %}👤{% else %}🐱{% endif %}
+                </div>
+                <div class="message-content">
+                    <div class="message-text">{{ message.content }}</div>
+                    <div class="message-time">{{ loop.index }} сообщение</div>
+                </div>
+            </div>
+        {% endfor %}
+        
+        <!-- Контейнер для новых сообщений -->
+        <div id="new-messages-container"></div>
+        
+        <!-- Индикатор печати -->
+        <div class="typing-indicator hidden" id="typing-indicator">
+            <div class="message assistant-message">
+                <div class="message-avatar">🐱</div>
+                <div class="message-content">
+                    <div class="message-text typing-text">
+                        <span class="typing-dots">
+                            <span>.</span><span>.</span><span>.</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form class="chat-input-form" id="chat-form">
+        <div class="input-container">
+            <input type="text" 
+                   name="message" 
+                   placeholder="Напишите сообщение Космокоту..."
+                   class="message-input"
+                   id="message-input"
+                   required
+                   autocomplete="off">
+            <button type="submit" class="send-button" id="send-button">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+    </form>
+</div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const chatHistory = document.getElementById('chat-history');
+    const newMessagesContainer = document.getElementById('new-messages-container');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const sendButton = document.getElementById('send-button');
+    
+    let currentChatId = "{{ chat_id }}";
+    
+    // Автопрокрутка вниз
+    scrollToBottom();
+    
+    chatForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const message = messageInput.value.trim();
+        if (!message) return;
+        
+        // Очищаем поле ввода и блокируем
+        messageInput.value = '';
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+        
+        // Показываем сообщение пользователя мгновенно
+        addMessageToChat('user', message);
+        
+        // Показываем индикатор печати
+        showTypingIndicator();
+        
+        try {
+            // Отправляем сообщение асинхронно
+            const response = await fetch('/api/send_message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: currentChatId,
+                    message: message
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // Скрываем индикатор печати
+            hideTypingIndicator();
+            
+            // Показываем ответ ИИ
+            if (data.reply) {
+                addMessageToChat('assistant', data.reply);
+            } else {
+                addMessageToChat('assistant', 'Мяу? Что-то пошло не так... 😿');
+            }
+            
+        } catch (error) {
+            console.error('Ошибка:', error);
+            hideTypingIndicator();
+            addMessageToChat('assistant', 'Мяу! Проблемы с космической связью... 🛰️');
+        } finally {
+            // Разблокируем поле ввода
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            messageInput.focus();
+        }
+    });
+    
+    function addMessageToChat(role, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${role}-message new-message`;
+        
+        const avatar = role === 'user' ? '👤' : '🐱';
+        const time = new Date().toLocaleTimeString('ru-RU', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        messageDiv.innerHTML = `
+            <div class="message-avatar">${avatar}</div>
+            <div class="message-content">
+                <div class="message-text">${content}</div>
+                <div class="message-time">${time}</div>
+            </div>
+        `;
+        
+        newMessagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+        
+        // Анимация появления
+        setTimeout(() => {
+            messageDiv.style.opacity = '1';
+            messageDiv.style.transform = 'translateY(0)';
+        }, 10);
+    }
+    
+    function showTypingIndicator() {
+        typingIndicator.classList.remove('hidden');
+        scrollToBottom();
+    }
+    
+    function hideTypingIndicator() {
+        typingIndicator.classList.add('hidden');
+    }
+    
+    function scrollToBottom() {
+        setTimeout(() => {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }, 100);
+    }
+    
+    // Автофокус на поле ввода
+    messageInput.focus();
+    
+    // Отправка по Enter
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            chatForm.dispatchEvent(new Event('submit'));
+        }
+    });
+});
+</script>
 {% endblock %}

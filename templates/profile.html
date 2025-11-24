@@ -1,29 +1,182 @@
 {% extends "base.html" %}
+
+{% block title %}Профиль - Космокот{% endblock %}
+
 {% block content %}
-<h2>Профиль</h2>
-<form method="post" enctype="multipart/form-data">
-  <label>
-    Имя
-    <input name="name" value="{{ current_user.name }}" placeholder="Ваше имя">
-  </label>
+<div class="profile-container">
+    <div class="profile-header">
+        <h1>Настройки профиля</h1>
+        <p>Управляйте вашими данными и настройками аккаунта</p>
+    </div>
 
-  <fieldset>
-    <legend>Смена пароля</legend>
-    <label>
-      Старый пароль
-      <input name="old_password" type="password" autocomplete="current-password">
-    </label>
-    <label>
-      Новый пароль
-      <input name="new_password" type="password" autocomplete="new-password">
-    </label>
-  </fieldset>
+    <div class="profile-content">
+        <div class="profile-sidebar">
+            <div class="user-card">
+                <div class="user-avatar-large">
+                    {% if current_user.id %}
+                        <img src="{{ url_for('user_avatar', user_id=current_user.id) }}" 
+                             alt="{{ current_user.name or current_user.login }}"
+                             id="profile-avatar-img"
+                             onerror="this.style.display='none'">
+                    {% endif %}
+                    <span class="avatar-fallback-large">👤</span>
+                </div>
+                <div class="user-info">
+                    <h3>{{ current_user.name or current_user.login }}</h3>
+                    <p class="user-login">@{{ current_user.login }}</p>
+                    <p class="user-joined">С нами с 2024</p>
+                </div>
+            </div>
 
-  <label>
-    Аватар (PNG/JPG, будет обрезано до 1024×1024)
-    <input name="avatar" type="file" accept="image/png,image/jpeg">
-  </label>
+            <nav class="profile-nav">
+                <a href="#personal" class="nav-item active" data-tab="personal">
+                    📝 Личные данные
+                </a>
+                <a href="#security" class="nav-item" data-tab="security">
+                    🔐 Безопасность
+                </a>
+                <a href="#avatar" class="nav-item" data-tab="avatar">
+                    🖼️ Аватар
+                </a>
+            </nav>
+        </div>
 
-  <button class="btn btn-primary" type="submit">Сохранить изменения</button>
-</form>
+        <div class="profile-main">
+            <form method="POST" enctype="multipart/form-data" class="profile-form">
+                <!-- Личные данные -->
+                <div class="tab-content active" id="personal-tab">
+                    <h2>Личные данные</h2>
+                    
+                    <div class="form-group">
+                        <label for="name" class="form-label">Имя</label>
+                        <input type="text" 
+                               id="name" 
+                               name="name" 
+                               class="form-input"
+                               placeholder="Ваше отображаемое имя"
+                               value="{{ current_user.name or '' }}">
+                        <div class="form-hint">Как к вам обращаться в системе</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Логин</label>
+                        <input type="text" 
+                               class="form-input"
+                               value="{{ current_user.login }}"
+                               disabled>
+                        <div class="form-hint">Логин нельзя изменить</div>
+                    </div>
+                </div>
+
+                <!-- Безопасность -->
+                <div class="tab-content" id="security-tab">
+                    <h2>Смена пароля</h2>
+                    
+                    <div class="form-group">
+                        <label for="old_password" class="form-label">Текущий пароль</label>
+                        <input type="password" 
+                               id="old_password" 
+                               name="old_password" 
+                               class="form-input"
+                               placeholder="Введите текущий пароль">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="new_password" class="form-label">Новый пароль</label>
+                        <input type="password" 
+                               id="new_password" 
+                               name="new_password" 
+                               class="form-input"
+                               placeholder="Придумайте новый пароль">
+                        <div class="form-hint">Минимум 6 символов</div>
+                    </div>
+                </div>
+
+                <!-- Аватар -->
+                <div class="tab-content" id="avatar-tab">
+                    <h2>Аватар профиля</h2>
+                    
+                    <div class="avatar-upload">
+                        <div class="avatar-preview">
+                            <div class="avatar-preview-img">
+                                {% if current_user.id %}
+                                    <img src="{{ url_for('user_avatar', user_id=current_user.id) }}" 
+                                         alt="Текущий аватар"
+                                         onerror="this.style.display='none'">
+                                {% endif %}
+                                <span class="avatar-preview-fallback">👤</span>
+                            </div>
+                        </div>
+
+                        <div class="avatar-upload-controls">
+                            <label for="avatar" class="btn btn-outline">
+                                📁 Выбрать файл
+                            </label>
+                            <input type="file" 
+                                   id="avatar" 
+                                   name="avatar" 
+                                   accept="image/png, image/jpeg, image/jpg"
+                                   class="file-input"
+                                   onchange="previewAvatar(this)">
+                            <div class="form-hint">
+                                Поддерживаются PNG, JPG до 5 МБ
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        💾 Сохранить изменения
+                    </button>
+                    <a href="{{ url_for('platform') }}" class="btn btn-outline">
+                        Отмена
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function previewAvatar(input) {
+    const preview = document.querySelector('.avatar-preview-img img');
+    const fallback = document.querySelector('.avatar-preview-fallback');
+    
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            if (!preview) {
+                const newPreview = document.createElement('img');
+                newPreview.src = e.target.result;
+                document.querySelector('.avatar-preview-img').prepend(newPreview);
+                fallback.style.display = 'none';
+            } else {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                fallback.style.display = 'none';
+            }
+        };
+        
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// Переключение табов
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        // Убираем активный класс у всех
+        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        
+        // Добавляем активный класс к текущему
+        this.classList.add('active');
+        const tabId = this.getAttribute('data-tab');
+        document.getElementById(tabId + '-tab').classList.add('active');
+    });
+});
+</script>
 {% endblock %}

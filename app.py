@@ -1,13 +1,8 @@
 from __future__ import annotations
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import (
-    LoginManager,
-    login_required,
-    current_user,
-)
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, send_file
+from flask_login import LoginManager, login_required, current_user
 import os
-from flask import send_file
- 
+
 import auth_manager
 import db_manager
 import ai_core
@@ -19,7 +14,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
 
-    # Init DB lazily (engine/session inside db_manager)
+    # Init DB
     db_manager.init_db()
 
     # Flask-Login setup
@@ -28,30 +23,37 @@ def create_app() -> Flask:
 
     @login_manager.user_loader
     def load_user(user_id: str):
-        return auth_manager.get_user_by_id(user_id)
+        return auth_manager.get_user_by_id(int(user_id))
 
     @app.route("/")
     def index():
         return render_template("index.html")
 
-
     @app.route("/random-cat")
     def random_cat():
-        """Возвращает JSON с URL случайного кота (через ai_core.get_random_cat)."""
+        """Возвращает JSON с URL случайного кота"""
         try:
             cat_url = ai_core.get_random_cat()
-        except Exception:
+            if not cat_url:
+                return jsonify({"error": "Не удалось получить изображение кота"}), 500
+            
+            # Проверяем, что URL валидный и не является data URL
+            if cat_url.startswith('data:'):
+                # Если это data URL, возвращаем ошибку или преобразуем
+                return jsonify({"error": "Некорректный формат изображения"}), 500
+                
+            return jsonify({"url": cat_url})
+        except Exception as e:
+            print(f"Ошибка в random-cat: {e}")
             return jsonify({"error": "Не удалось получить изображение кота"}), 500
-        return jsonify({"url": cat_url})
 
     @app.route("/favicon.ico")
     def favicon():
-        path = os.path.join(os.path.dirname(__file__), "favicon.ico")
+        path = os.path.join(app.root_path, "static", "favicon.ico")
         if os.path.exists(path):
             return send_file(path, mimetype="image/x-icon")
-        return redirect(url_for("index"))
+        return "", 404
 
-    # Placeholders for future routes per plan
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
@@ -61,7 +63,8 @@ def create_app() -> Flask:
                 user = auth_manager.get_user_by_login(login_value)
                 if user:
                     auth_manager.login_user_session(user)
-                    return redirect(url_for("platform"))
+                    next_page = request.args.get('next')
+                    return redirect(next_page or url_for("platform"))
             flash("Неверный логин или пароль", "error")
         return render_template("login.html")
 
@@ -97,8 +100,8 @@ def create_app() -> Flask:
         if request.method == "POST":
             updated = False
             # Update name
-            new_name = request.form.get("name")
-            if new_name is not None and new_name.strip():
+            new_name = request.form.get("name", "").strip()
+            if new_name:
                 if profile_manager.update_name(int(current_user.id), new_name):
                     updated = True
             # Change password
@@ -112,15 +115,16 @@ def create_app() -> Flask:
             # Upload avatar
             if "avatar" in request.files:
                 file = request.files["avatar"]
-                if file and file.filename:
+                if file and file.filename and file.filename != '':
                     data = file.read()
-                    if not profile_manager.upload_avatar(int(current_user.id), data):
-                        flash("Ошибка загрузки аватара (ожидается PNG/JPG)", "error")
-                    else:
-                        updated = True
+                    if data:
+                        if not profile_manager.upload_avatar(int(current_user.id), data):
+                            flash("Ошибка загрузки аватара (ожидается PNG/JPG)", "error")
+                        else:
+                            updated = True
             if updated:
                 flash("Изменения сохранены", "success")
-                return redirect(url_for("profile"))
+            return redirect(url_for("profile"))
         return render_template("profile.html")
 
     @app.route("/platform")
@@ -129,46 +133,98 @@ def create_app() -> Flask:
         chats = chat_manager.list_chats(int(current_user.id))
         return render_template("platform.html", chats=chats)
 
-    @app.route("/chat/new", methods=["POST", "GET"])
+    @app.route("/chat/new", methods=["POST"])
     @login_required
     def new_chat():
         chat_id = chat_manager.create_chat(int(current_user.id))
         return redirect(url_for("chat", chat_id=chat_id))
 
-    @app.route("/chat/<string:chat_id>", methods=["GET", "POST"])
+    @app.route("/chat/<string:chat_id>", methods=["GET"])
     @login_required
     def chat(chat_id: str):
-        if request.method == "POST":
-            msg = request.form.get("message", "").strip()
-            if msg:
-                chat_manager.append_message(chat_id, role="user", content=msg)
-                # Generate AI reply and append
-                history_for_ai = chat_manager.get_chat_history(chat_id)
-                try:
-                    reply = ai_core.generate_reply(history_for_ai)
-                except Exception:
-                    reply = "Мяу... Похоже, мои двигатели перегрелись. Попробуйте ещё раз."
-                chat_manager.append_message(chat_id, role="assistant", content=reply)
-            return redirect(url_for("chat", chat_id=chat_id))
+        """Страница чата - только GET запросы"""
+        # Проверяем принадлежит ли чат текущему пользователю
+        if not _check_chat_access(chat_id, int(current_user.id)):
+            flash("Чат не найден", "error")
+            return redirect(url_for("platform"))
+        
         history = chat_manager.get_chat_history(chat_id)
-        return render_template("chat.html", chat_id=chat_id, history=history)
+        chat_info = chat_manager.get_chat_info(chat_id)
+        return render_template("chat.html", chat_id=chat_id, history=history, chat_info=chat_info)
+
+    @app.route("/api/send_message", methods=["POST"])
+    @login_required
+    def api_send_message():
+        """API endpoint для асинхронной отправки сообщений"""
+        data = request.get_json()
+        chat_id = data.get('chat_id')
+        message = data.get('message', '').strip()
+        
+        if not chat_id or not message:
+            return jsonify({'error': 'Неверные данные'}), 400
+        
+        # Проверяем доступ к чату
+        if not _check_chat_access(chat_id, int(current_user.id)):
+            return jsonify({'error': 'Чат не найден'}), 404
+        
+        # Добавляем сообщение пользователя
+        chat_manager.append_message(chat_id, 'user', message)
+        
+        # Генерируем ответ ИИ
+        history = chat_manager.get_chat_history(chat_id)
+        try:
+            reply = ai_core.generate_reply(history)
+        except Exception as e:
+            print(f"❌ Ошибка генерации ответа: {e}")
+            reply = "Мяу... Похоже, мои двигатели перегрелись. Попробуйте ещё раз."
+        
+        # Добавляем ответ ассистента
+        chat_manager.append_message(chat_id, 'assistant', reply)
+        
+        return jsonify({'reply': reply})
 
     @app.route("/user/<int:user_id>/avatar")
-    @login_required
     def user_avatar(user_id: int):
-        if current_user.id != user_id:
-            return "", 403
+        """Получить аватар пользователя"""
         avatar_blob = profile_manager.get_user_avatar(user_id)
         if not avatar_blob:
-            return "", 204  # Нет контента
-        from flask import Response
+            return "", 204
         return Response(avatar_blob, mimetype="image/png")
+
+    @app.route("/chat/<string:chat_id>/avatar")
+    def chat_avatar(chat_id: str):
+        """Получить аватар чата"""
+        cat_avatar_blob = chat_manager.get_chat_avatar(chat_id)
+        if not cat_avatar_blob:
+            # Генерируем новый аватар
+            cat_avatar_blob = _generate_chat_avatar(chat_id)
+            
+        if not cat_avatar_blob:
+            return "", 204
+            
+        return Response(cat_avatar_blob, mimetype="image/png")
+
+    def _check_chat_access(chat_id: str, user_id: int) -> bool:
+        """Проверяет принадлежит ли чат пользователю"""
+        user_chats = chat_manager.list_chats(user_id)
+        return any(chat['chat_id'] == chat_id for chat in user_chats)
+
+    def _generate_chat_avatar(chat_id: str) -> bytes:
+        """Генерирует аватар для чата используя aleatori.cat"""
+        try:
+            import requests
+            url = ai_core.get_random_cat()
+            if url:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    return chat_manager.process_avatar(response.content, 500)
+        except Exception as e:
+            print(f"❌ Ошибка генерации аватара чата: {e}")
+        return None
 
 
     return app
-    
 
 if __name__ == "__main__":
     app = create_app()
     app.run(host="0.0.0.0", port=5000, debug=True)
-
